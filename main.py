@@ -172,7 +172,18 @@ def on_rx2(text):
     control_data = [0, 0, 0, 0]
     roll, pitch, yaw, jc_roll, jc_pitch, jc_yaw, jc_thrust, battery, cur_high = states
 
+    angle = 60
+    current_angle = yaw
 
+    if current_angle - 10 < angle < current_angle + 10:
+        angle_status = "keep"
+    # 移动角度
+    elif angle < current_angle:
+        # 左转
+        control_motors_m1_m4([0, 0, 100, 100])
+    elif angle > current_angle:
+        # 右转
+        control_motors_m1_m4([0, 0, -100, 100])
 
     if high != cur_high:
         high = cur_high
