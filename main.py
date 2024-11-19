@@ -1,8 +1,7 @@
-import time
-
 import ble_simple_peripheral
 import bluetooth
 import drone
+import utime
 from machine import Pin, PWM
 
 # Initialize the drone
@@ -27,13 +26,36 @@ while True:
     if d.read_calibrated():
         print(d.read_cal_data())
         break
-    time.sleep_ms(1000)
+    utime.sleep_ms(1000)
 
 # Initialize motors with GPIO pins
 M1 = PWM(Pin(4), freq=10000, duty=0)
 M2 = PWM(Pin(5), freq=10000, duty=0)
 M3 = PWM(Pin(40), freq=10000, duty=0)
 M4 = PWM(Pin(41), freq=10000, duty=0)
+
+trig = Pin(43, Pin.OUT)
+echo = Pin(44, Pin.IN)
+
+
+def getDistance():
+    global trig
+    global echo
+
+    trig.value(0)  # Set the trigger to low
+    utime.sleep_us(2)  # Wait for 2 microseconds
+    trig.value(1)  # Set the trigger
+    utime.sleep_us(10)
+    trig.value(0)  # Set the trigger to low
+
+    while echo.value() == 0:
+        start = utime.ticks_us()  # Record the time when the echo starts
+    while echo.value() == 1:
+        end = utime.ticks_us()  # Record the time when the echo ends
+
+    d = (end - start) * 0.0343 / 2  # Calculate the distance
+    return d
+
 
 # Initialize Bluetooth
 ble = bluetooth.BLE()
@@ -168,23 +190,28 @@ def on_rx2(text):
     global high
     # Read drone state
     states = d.read_states()
-    print('states:', states)
     control_data = [0, 0, 0, 0]
+
+    # 修改state第9个值index8的值为getDistance()返回的值
+    distance = getDistance()
+    states = list(states)
+    states[8] = distance
+
     roll, pitch, yaw, jc_roll, jc_pitch, jc_yaw, jc_thrust, battery, cur_high = states
+    print('states:', states)
 
-    angle = 60
-    current_angle = yaw
-
-    if current_angle - 10 < angle < current_angle + 10:
-        angle_status = "keep"
-    # 移动角度
-    elif angle < current_angle:
-        # 左转
-        control_motors_m1_m4([0, 0, 100, 100])
-    elif angle > current_angle:
-        # 右转
-        control_motors_m1_m4([0, 0, -100, 100])
-
+    # angle = 60
+    # current_angle = yaw
+    #
+    # if current_angle - 10 < angle < current_angle + 10:
+    #     angle_status = "keep"
+    # # 移动角度
+    # elif angle < current_angle:
+    #     # 左转
+    #     control_motors_m1_m4([0, 0, 100, 100])
+    # elif angle > current_angle:
+    #     # 右转
+    #     control_motors_m1_m4([0, 0, -100, 100])
     if high != cur_high:
         high = cur_high
     else:
@@ -210,8 +237,8 @@ def on_rx2(text):
 
     #
 
-    states = d.read_states()
-    print('states:', states)
+    # states = d.read_states()
+    # print('states:', states)
     state_buf = [None] * 18
     for i in range(9):
         for j in range(2):
