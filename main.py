@@ -2,31 +2,19 @@ import ble_simple_peripheral
 import bluetooth
 import drone
 import utime
-from machine import Pin, PWM
+from machine import Pin, PWM, SoftI2C
+
+from vl53l1x import VL53L1X
 
 # Initialize the drone
 d = drone.DRONE(flightmode=0, debug=1)
-"""
-while True:
- 
- #打印校准信息，当返回 3 个值均少于 5000 时校准通过。
- print(d.read_cal_data())
- 
- #校准通过
- if d.read_calibrated():
- 
- print(d.read_cal_data())
- 
- break
- 
- time.sleep_ms(100)
-"""
-while True:
-    print(d.read_cal_data())
-    if d.read_calibrated():
-        print(d.read_cal_data())
-        break
-    utime.sleep_ms(1000)
+
+# while True:
+#     print(d.read_cal_data())
+#     if d.read_calibrated():
+#         print(d.read_cal_data())
+#         break
+#     utime.sleep_ms(1000)
 
 # Initialize motors with GPIO pins
 M1 = PWM(Pin(4), freq=10000, duty=0)
@@ -34,11 +22,15 @@ M2 = PWM(Pin(5), freq=10000, duty=0)
 M3 = PWM(Pin(40), freq=10000, duty=0)
 M4 = PWM(Pin(41), freq=10000, duty=0)
 
-trig = Pin(43, Pin.OUT)
-echo = Pin(44, Pin.IN)
+# trig = Pin(43, Pin.OUT)
+# echo = Pin(44, Pin.IN)
+i2c = SoftI2C(scl=Pin(18), sda=Pin(17))
+devices = i2c.scan()
+print('i2c devices: ', devices)
+tof = VL53L1X(i2c)
 
 
-def getDistance():
+def getDistanceByUltrasonic():
     global trig
     global echo
 
@@ -55,6 +47,10 @@ def getDistance():
 
     d = (end - start) * 0.0343 / 2  # Calculate the distance
     return d
+
+
+def getDistance():
+    return tof.read() / 10  # mm
 
 
 # Initialize Bluetooth
@@ -223,13 +219,13 @@ def on_rx2(text):
         control_motors_m2_m3(control_data)
         # Control M1 and M4 (Handle B)
         control_motors_m1_m4(control_data)
-    elif high <= 50:
+    elif high <= 180:
         control_data[1] = 80
         for _ in range(10):
             control_motors_m2_m3(control_data)
             # Control M1 and M4 (Handle B)
             control_motors_m1_m4(control_data)
-    elif 50 < high <= 100:
+    elif 180 < high <= 200:
         control_data[1] = 60
         control_motors_m2_m3(control_data)
         # Control M1 and M4 (Handle B)
