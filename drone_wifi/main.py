@@ -1,11 +1,3 @@
-'''
-实验名称：WiFi遥控四轴飞行器（pyDrone四轴代码）
-版本：v1.0
-日期：2022.6
-作者：01Studio
-说明：通过Socket UDP连接，周期接收手柄发来的控制信息，并回传自身姿态信息。
-'''
-
 import socket
 import time
 
