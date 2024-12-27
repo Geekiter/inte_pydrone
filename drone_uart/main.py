@@ -1,5 +1,7 @@
 import json
 
+import ble_simple_peripheral
+import bluetooth
 from machine import Pin, Timer, PWM, UART
 
 import drone
@@ -12,6 +14,8 @@ M3 = PWM(Pin(40), freq=10000, duty=0)
 M4 = PWM(Pin(41), freq=10000, duty=0)
 
 uart = UART(1, tx=43, rx=44)
+ble = bluetooth.BLE()
+p = ble_simple_peripheral.BLESimplePeripheral(ble, name='pyDrone')
 
 
 def cap_duty_cycle(value):
@@ -22,29 +26,19 @@ def control_motors_m2_m3(control_data):
     y_val = control_data[1]
     x_val = control_data[0]
 
-    if y_val > 0:
-        duty_m2 = cap_duty_cycle(y_val)
-        duty_m3 = cap_duty_cycle(y_val)
-        print(f"Before M2 duty cycle: {duty_m2} / 1023, M3 duty cycle: {duty_m3} / 1023")
-        if x_val == 100:
-            M2.duty(0)
-            M3.duty(duty_m3)
-        elif x_val == -100:
-            M2.duty(duty_m2)
-            M3.duty(0)
+    duty_m2 = cap_duty_cycle(abs(y_val))
+    duty_m3 = cap_duty_cycle(abs(x_val))
+    if y_val > 20:
+        if x_val > 80:
+            left(duty_m2)
+        elif x_val < -80:
+            right(duty_m2)
         else:
-            proportion = (x_val + 100) / 200  # Map x to range between 0 and 1
-            duty_m2b = int(duty_m2 * (1 - proportion))
-            duty_m3b = int(duty_m3 * proportion)
-            print(f"calculation M2 duty cycle: {duty_m2b} / 1023, M3 duty cycle: {duty_m3b} / 1023")
-            M2.duty(duty_m2b)
-            M3.duty(duty_m3b)
+            forward(duty_m2)
+    elif y_val < -20:
+        backward(duty_m2)
     else:
-        M2.duty(0)
-        M3.duty(0)
-
-    # Print the current duty cycles for M2 and M3
-    print(f"M2 duty cycle: {M2.duty()} / 1023, M3 duty cycle: {M3.duty()} / 1023")
+        reset()
 
 
 def control_motors_m1_m4(control_data):
@@ -52,57 +46,61 @@ def control_motors_m1_m4(control_data):
     y_val = control_data[3]
     x_val = control_data[2]
 
-    if y_val > 0:
-        duty_m1 = cap_duty_cycle(y_val)
-        duty_m4 = cap_duty_cycle(y_val)
-
-        if x_val == 100:
-            M1.duty(0)
-            M4.duty(duty_m4)
-        elif x_val == -100:
-            M1.duty(duty_m1)
-            M4.duty(0)
-        else:
-            M1.duty(duty_m1)
-            M4.duty(duty_m1)
-            # proportion = (x_val + 100) / 200  # Map x to range between 0 and 1
-            # M1.duty(int(duty_m1 * (1 - proportion)))
-            # M4.duty(int(duty_m4 * proportion))
+    duty_m1 = cap_duty_cycle(abs(y_val))
+    duty_m4 = cap_duty_cycle(abs(x_val))
+    if y_val > 5:
+        up(duty_m1)
+    elif y_val < -20:
+        reset()
 
 
-    else:
-        M1.duty(0)
-        M4.duty(0)
-
-    # Print the current duty cycles for M1 and M4
-    print(f"M1 duty cycle: {M1.duty()} / 1023, M4 duty cycle: {M4.duty()} / 1023")
+def reset():
+    M1.duty(0)
+    M2.duty(0)
+    M3.duty(0)
+    M4.duty(0)
 
 
 def up(l=50):
-    control_data = [0, l, 0, l]
-    # control_data[1] = l
-    control_motors_m2_m3(control_data)
-    control_motors_m1_m4(control_data)
+    M1.duty(l)
+    # M3.duty(l)
+    # M2.duty(l)
+    M4.duty(l)
+    # reset()
 
 
 def right(l=100):
-    control_motors_m1_m4([0, 0, 0, 0])
-    control_motors_m2_m3([100, l, 0, 0])
+    M4.duty(l)
+    M2.duty(l)
+    M1.duty(0)
+    M3.duty(0)
+
+    # reset()
 
 
 def left(l=100):
-    control_motors_m1_m4([0, 0, 0, 0])
-    control_motors_m2_m3([-100, l, 0, 0])
+    M1.duty(l)
+    M3.duty(l)
+    M2.duty(0)
+    M4.duty(0)
+
+    # reset()
 
 
 def backward(l=100):
-    control_motors_m2_m3([0, 0, 0, 0])
-    control_motors_m1_m4([0, 0, 0, l])
+    M4.duty(l)
+    M1.duty(l)
+    M2.duty(0)
+    M3.duty(0)
+    # reset()
 
 
 def forward(l=100):
-    control_motors_m2_m3([0, l, 0, 0])
-    control_motors_m1_m4([0, 0, 0, 0])
+    M2.duty(l)
+    M3.duty(l)
+    M1.duty(0)
+    M4.duty(0)
+    # reset()
 
 
 def Socket_fun(tim):
@@ -124,12 +122,58 @@ def get_json(uart_data):
         return {}
 
 
+def on_rx(text):
+    control_data = [None] * 4
+
+    # Process control data
+    for i in range(4):
+        if 100 < text[i + 1] < 155:
+            control_data[i] = 0
+        elif text[i + 1] <= 100:
+            control_data[i] = text[i + 1] - 100
+        else:
+            control_data[i] = text[i + 1] - 155
+
+    print('control:', control_data)
+
+    # Control M2 and M3 (Handle A)
+    control_motors_m2_m3(control_data)
+
+    # Control M1 and M4 (Handle B)
+    control_motors_m1_m4(control_data)
+
+    # Detect button press
+    if text[5] == 24:  # Y button pressed
+        print('Y')
+        # Motor beep can be added here
+    elif text[5] == 136:  # X button pressed, stop all motors
+        print('X')
+        M1.duty(0)
+        M2.duty(0)
+        M3.duty(0)
+        M4.duty(0)
+        d.stop()
+
+    # Read drone state
+    states = d.read_states()
+    print('states:', states)
+    state_buf = [None] * 18
+    for i in range(9):
+        for j in range(2):
+            if j == 0:
+                state_buf[i * 2 + j] = int((states[i] + 32768) / 256)
+            else:
+                state_buf[i * 2 + j] = int((states[i] + 32768) % 256)
+
+    p.send(bytes(state_buf))  # Send state back via Bluetooth
+
+
 def read_uart(tim):
     global uart
     if uart.any():
         data = get_json(uart.read().decode("utf-8"))
         control = data.get("control", 'down')
-        speed = int(data.get("speed", 0))
+        speed = cap_duty_cycle(int(data.get("speed", 0)))
         if control == 'forward':
             forward(speed)
         elif control == 'backward':
@@ -142,6 +186,10 @@ def read_uart(tim):
             up(speed)
         elif control == 'down':
             up(0)
+    # else:
+    # reset()
 
+
+p.on_write(on_rx)
 tim = Timer(1)
 tim.init(period=50, mode=Timer.PERIODIC, callback=read_uart)

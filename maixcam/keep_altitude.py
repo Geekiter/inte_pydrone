@@ -222,16 +222,16 @@ safe_x_right = cam_width - safe_resolution
 safe_y_up = safe_resolution
 safe_y_down = cam_height - safe_resolution
 
-altitude = 100  # cm
+altitude = 120  # cm
 
-Kp = 1
-Ki = 0.3
-Kd = 0.01
+Kp = 2
+Ki = 1
+Kd = 6
 
-setpoint = altitude
+setpoint = altitude + 10
 integral = 0
 last_error = 0
-max_integral = 30.0
+max_integral = 100.0
 min_integral = -30.0
 max_speed = 100.0
 min_speed = 15.0
@@ -240,17 +240,11 @@ while 1:
     current_height = get_distance()
     error = setpoint - current_height
 
-    if abs(error) < 5:  # 当误差较小时才允许积分
-        integral += error
-        integral = max(min(integral, max_integral), min_integral)
-    else:
-        integral = 0  # 大误差时重置积分
-
     # integral += error
     derivative = error - last_error
 
     # output = Kp * error + Ki * integral + Kd * derivative
-    output = Kp * error + Ki * integral
+    output = Kp * error + Kd * derivative
     output = max(min(output, max_speed), min_speed)
     print("current_height:", current_height)
     print("speed:", output)
