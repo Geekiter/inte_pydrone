@@ -8,6 +8,9 @@ from face_tracking import servos
 from pid import PID
 from vl53l1x import VL53L1X
 
+# 机体偏向
+structure_trend = "right"
+
 # maixcam
 cam_width = 300  # 480
 cam_height = 200  # 280
@@ -38,7 +41,7 @@ def get_distance():
         dis += tof.read()
         # time.sleep_ms(10)
     out = dis / 10 / count
-    print("distance: ", out)
+    # print("distance: ", out)
     return out
 
 
@@ -116,9 +119,9 @@ altitude_pid = PID(
     target=target_height + 40
 )
 angle_pid = PID(
-    p=8,
+    p=5,
     i=0,
-    d=8,
+    d=5,
     v_max=500,
     v_min=-500,
     target=0
@@ -131,7 +134,7 @@ def get_json(uart_data):
         # find { and } first appear position, then cut the string
         if "{" in uart_data and "}" in uart_data:
             uart_data = uart_data[uart_data.index("{"): uart_data.index("}") + 1]
-            print("json data: ", uart_data)
+            # print("json data: ", uart_data)
             return json.loads(uart_data)
         else:
             return {}
@@ -149,13 +152,13 @@ current_angle = 0.0
 
 # 定高
 # 80cm
-# while altitude_stable_count < 10:
-#     current_height = get_distance()
-#     if math.fabs(current_height - target_height) < 5:
-#         altitude_stable_count += 1
-#
-#     speed = altitude_pid.update(current_height)
-#     drone.up(speed)
+while altitude_stable_count < 10:
+    current_height = get_distance()
+    if math.fabs(current_height - target_height) < 10:
+        altitude_stable_count += 1
+
+    speed = altitude_pid.update(current_height)
+    drone.up(speed)
 
 # 旋转
 while True:
@@ -206,23 +209,30 @@ while True:
             forward_speed = 0
 
         angel_speed = angle_pid.update(current_angle)
-        print("angle: ", target_angle, "angel_speed: ", angel_speed)
-        print("pid target: ", angle_pid.target)
+        # print("angle: ", target_angle, "angel_speed: ", angel_speed)
+        # print("pid target: ", angle_pid.target)
 
         if angel_speed < 0:
             angel_speed = abs(angel_speed)
             # left
             print('left')
-            drone.duty(m2=up_speed - angel_speed, m3=up_speed + angel_speed, m1=forward_speed, m4=forward_speed)
-            print('m1:', forward_speed, 'm2:', up_speed - angel_speed, 'm3:', up_speed + angel_speed, 'm4:',
-                  forward_speed)
+            if structure_trend == "right":
+                drone.duty(m2=100, m3=up_speed + angel_speed, m1=forward_speed - angel_speed,
+                           m4=forward_speed + angel_speed)
+            else:
+                drone.duty(m2=up_speed, m3=up_speed + angel_speed, m1=forward_speed,
+                           m4=forward_speed)
+
         elif tag_x >= safe_x2:
             angel_speed = abs(angel_speed)
             # right
             print('right')
-            drone.duty(m2=up_speed + angel_speed, m3=up_speed - angel_speed, m1=forward_speed, m4=forward_speed)
-            print('m1:', forward_speed, 'm2:', up_speed + angel_speed, 'm3:', up_speed - angel_speed, 'm4:',
-                  forward_speed)
+            if structure_trend == "right":
+                drone.duty(m2=up_speed + angel_speed, m3=up_speed, m1=forward_speed + angel_speed,
+                           m4=forward_speed - angel_speed)
+            else:
+                drone.duty(m2=up_speed + angel_speed, m3=100, m1=forward_speed + angel_speed,
+                           m4=forward_speed - angel_speed)
 
     # drone.right(00)
     # 画安全区域
