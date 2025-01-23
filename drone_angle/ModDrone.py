@@ -22,14 +22,13 @@ class myDrone:
         duty_m2 = cap_duty_cycle(abs(y_val))
         duty_m3 = cap_duty_cycle(abs(x_val))
         if y_val > 20:
-            if x_val > 80:
-                self.left(duty_m2)
-            elif x_val < -80:
-                self.right(duty_m2)
-            else:
-                self.forward(duty_m2)
+            self.forward(duty_m2)
         elif y_val < -20:
             self.backward(duty_m2)
+        elif x_val > 10:
+            self.right(duty_m3)
+        elif x_val < -10:
+            self.left(duty_m3)
         else:
             self.reset()
 
@@ -52,10 +51,13 @@ class myDrone:
         self.m4.duty(0)
 
     def up(self, l=50):
+        if l < 0:
+            l = 0
+
         # self.m1.duty(l)
-        adj = int(0.35 * l)
-        l_up = l + adj
-        l_down = l - adj
+        adj = int(0.25 * l)
+        l_down = l + adj
+        l_up = l - adj
         print(l_up)
 
         self.m3.duty(l_up)
@@ -84,3 +86,17 @@ class myDrone:
         # self.m3.duty(l)
         self.m1.duty(l)
         self.m4.duty(l)
+
+    def duty(self, m1, m2, m3, m4):
+        if m1 < 0:
+            m1 = 0
+        if m2 < 0:
+            m2 = 0
+        if m3 < 0:
+            m3 = 0
+        if m4 < 0:
+            m4 = 0
+        self.m1.duty(m1)
+        self.m2.duty(m2)
+        self.m3.duty(m3)
+        self.m4.duty(m4)

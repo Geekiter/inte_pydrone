@@ -13,7 +13,7 @@ state_buf = [None] * 18
 
 uart = UART(1, tx=43, rx=44)
 blue_port = bluetooth.BLE()
-blue = ble_simple_peripheral.BLESimplePeripheral(blue_port, name='pyDrone')
+blue = ble_simple_peripheral.BLESimplePeripheral(blue_port, name='pyDrone2')
 
 cal_led = Pin(42, Pin.OUT)  # green LED
 cal_led.value(0)
@@ -91,7 +91,7 @@ def on_controller(text):
     cal_count += 1
     states = list(states)
     print('before states:', states)
-    states[2] = states[2] - cal_count * ave_add_yaw
+    # states[2] = states[2] - cal_count * ave_add_yaw
 
     print('after states:', states)
     state_buf = [None] * 18
@@ -155,6 +155,12 @@ def read_uart(tim):
             myDrone.up(speed)
         elif control == 'down':
             myDrone.up(0)
+        elif control == 'duty':
+            m1 = int(data.get("m1", 0))
+            m2 = int(data.get("m2", 0))
+            m3 = int(data.get("m3", 0))
+            m4 = int(data.get("m4", 0))
+            myDrone.duty(m1, m2, m3, m4)
 
 
 blue.on_write(on_controller)
