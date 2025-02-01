@@ -19,8 +19,9 @@ safe_y = cam_height / 4
 
 safe_x1 = cam_width / 2 - safe_x
 safe_x2 = cam_width / 2 + safe_x
-safe_y1 = cam_height / 2 - safe_y
+safe_y1 = 0
 safe_y2 = cam_height / 2 + safe_y
+safe_y3 = cam_height
 
 cam = camera.Camera(cam_width, cam_height)
 disp = display.Display()
@@ -109,13 +110,13 @@ class Drone:
 
 
 drone = Drone(serial)
-target_height = 100
+target_height = 80
 altitude_pid = PID(
     p=8,
     i=0,
     d=8,
     v_max=800.0,
-    v_min=300.0,
+    v_min=100.0,
     target=target_height + 40
 )
 angle_pid = PID(
@@ -160,8 +161,15 @@ while altitude_stable_count < 10:
     speed = altitude_pid.update(current_height)
     drone.up(speed)
 
+target_action = [
+    {"mode": "find_apriltags", "id": 23, "action": "find"},
+    {"mode": "find_apriltags", "id": 22, "action": "find"},
+    {"mode": "find_apriltags", "id": 23, "action": "find"},
+    {"mode": "find_apriltags", "id": "", "action": "finished"},
+]
+current_action_index = 0
 # 旋转
-while True:
+while target_action[current_action_index]["action"] != "finished":
     img = cam.read()
     # 定高
     current_height = get_distance()
@@ -171,6 +179,7 @@ while True:
     json_data = get_json(incoming_data)
     if json_data:
         current_angle = json_data.get("yaw", -1)
+        drone.up(up_speed)
     else:
         drone.up(up_speed)
         continue
@@ -183,16 +192,20 @@ while True:
 
         continue
     for a in tags:
+        if a.id() != target_action[current_action_index]["id"]:
+            continue
+
         corners = a.corners()
         for i in range(4):
             img.draw_line(corners[i][0], corners[i][1], corners[(i + 1) % 4][0], corners[(i + 1) % 4][1],
                           image.COLOR_GREEN, 2)
         # 确认是前进还是后退
-        tag_x = a.x()
-        tag_y = a.y()
+        tag_x = a.x() + a.w() / 2
+        tag_y = a.y() + a.h() / 2
 
         target_angle = 0.0
         forward_speed = 0
+
         if tag_x < cam_width / 2:
             target_angle = current_angle - math.atan((cam_width / 2 - tag_x) / (cam_height - tag_y)) * (
                     180 / math.pi)
@@ -201,26 +214,36 @@ while True:
                     180 / math.pi)
 
         angle_pid.target = target_angle
+        # 计算tag面积
+        tag_area = a.w() * a.h()
 
-        if safe_x1 < tag_x < safe_x2 and safe_y1 < tag_y < safe_y2:
+        if (safe_x1 < tag_x < safe_x2 and safe_y2 < tag_y < safe_y3) or tag_area > cam_width * cam_height / 3 * 2:
+            current_action_index += 1
+            print("next action: ", target_action[current_action_index])
+            continue
+        elif safe_x1 < tag_x < safe_x2 and safe_y1 < tag_y < safe_y2:
             forward_speed = 500
-
         else:
             forward_speed = 0
 
         angel_speed = angle_pid.update(current_angle)
         # print("angle: ", target_angle, "angel_speed: ", angel_speed)
         # print("pid target: ", angle_pid.target)
+        if current_height < target_height / 2:
+            turn_speed = up_speed - angel_speed
+        else:
+            turn_speed = 100
 
         if angel_speed < 0:
             angel_speed = abs(angel_speed)
             # left
             print('left')
             if structure_trend == "right":
-                drone.duty(m2=100, m3=up_speed + angel_speed, m1=forward_speed - angel_speed,
+
+                drone.duty(m2=turn_speed, m3=up_speed + angel_speed, m1=forward_speed - angel_speed,
                            m4=forward_speed + angel_speed)
             else:
-                drone.duty(m2=up_speed, m3=up_speed + angel_speed, m1=forward_speed,
+                drone.duty(m2=up_speed, m3=up_speed, m1=forward_speed,
                            m4=forward_speed)
 
         elif tag_x >= safe_x2:
@@ -231,7 +254,7 @@ while True:
                 drone.duty(m2=up_speed + angel_speed, m3=up_speed, m1=forward_speed + angel_speed,
                            m4=forward_speed - angel_speed)
             else:
-                drone.duty(m2=up_speed + angel_speed, m3=100, m1=forward_speed + angel_speed,
+                drone.duty(m2=up_speed, m3=turn_speed, m1=forward_speed + angel_speed,
                            m4=forward_speed - angel_speed)
 
     # drone.right(00)
